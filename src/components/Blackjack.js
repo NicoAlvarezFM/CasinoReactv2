@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import fondoMesa from '../assets/images/fondo_mesa.jpg';
-
-// Importar imágenes de fichas
 import chip1 from '../assets/images/Chip_1.png';
 import chip5 from '../assets/images/Chip_5.png';
 import chip10 from '../assets/images/Chip_10.png';
@@ -12,16 +10,18 @@ import chip500 from '../assets/images/Chip_500.png';
 import chip1000 from '../assets/images/Chip_1000.png';
 import chip5000 from '../assets/images/Chip_5000.png';
 
-// Utilidades básicas de Blackjack
+// Palos de cartas
 const SUITS = ['♠', '♥', '♦', '♣'];
+// Rangos de cartas
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
+// Crea un mazo de 52 cartas
 function buildDeck() {
   const deck = [];
   for (const s of SUITS) {
     for (const r of RANKS) {
       let value = 0;
-      if (r === 'A') value = 11; // tratamos As como 11 y ajustamos luego
+      if (r === 'A') value = 11;
       else if (['J', 'Q', 'K'].includes(r)) value = 10;
       else value = Number(r);
       deck.push({ rank: r, suit: s, value });
@@ -30,6 +30,7 @@ function buildDeck() {
   return deck;
 }
 
+// Baraja un array de cartas
 function shuffle(array) {
   const arr = array.slice();
   for (let i = arr.length - 1; i > 0; i--) {
@@ -39,22 +40,23 @@ function shuffle(array) {
   return arr;
 }
 
+// Calcula el puntaje de una mano (ignora cartas ocultas)
 function scoreHand(hand) {
-  // Suma con Ases flexibles (11 o 1)
   let total = 0;
   let aces = 0;
   for (const c of hand) {
+    if (c.hidden) continue;
     total += c.value;
     if (c.rank === 'A') aces += 1;
   }
   while (total > 21 && aces > 0) {
-    total -= 10; // un As pasa de 11 a 1
+    total -= 10;
     aces -= 1;
   }
   return total;
 }
 
-// Nueva función para obtener el puntaje mostrando valores alternativos
+// Devuelve el puntaje de la mano mostrando valores alternativos si hay As
 function getHandDisplay(hand) {
   let total = 0;
   let aces = 0;
@@ -69,7 +71,6 @@ function getHandDisplay(hand) {
     lowTotal -= 10;
     acesUsed += 1;
   }
-  // Si hay As y el valor alto es válido (<=21) y diferente del bajo, mostrar ambos
   if (aces > 0 && highTotal <= 21 && highTotal !== lowTotal) {
     return `${highTotal}/${lowTotal}`;
   }
@@ -101,11 +102,31 @@ export default function Blackjack({ currentUser }) {
   const [dealerStatus, setDealerStatus] = useState(''); // 'bust' | 'blackjack' | ''
   const [chipSelected, setChipSelected] = useState(false); // requiere seleccionar ficha antes de repartir
   // Flag para caso donde el jugador tiene blackjack natural y el dealer podría empatar
-  const [playerNaturalBlackjack, setPlayerNaturalBlackjack] = useState(false);
+  // const [playerNaturalBlackjack, setPlayerNaturalBlackjack] = useState(false);
 
   // Estado juego
   const [phase, setPhase] = useState('idle'); // 'idle' | 'player' | 'dealer' | 'roundOver'
   const [message, setMessage] = useState('');
+
+  // Estado para carta oculta y animación
+  // const [hiddenCard, setHiddenCard] = useState(null);
+  const [revealHidden, setRevealHidden] = useState(false);
+
+  // Estado para evaluar el resultado tras revelar carta oculta
+  const [pendingRevealEval, setPendingRevealEval] = useState(null);
+
+  // Efecto para evaluar resultado de doble oculto tras revelar carta
+  useEffect(() => {
+    if (pendingRevealEval && pendingRevealEval.hands && pendingRevealEval.dealerHand) {
+      // Verificar que ya no hay cartas ocultas en la mano activa
+      const manoActiva = pendingRevealEval.hands[active];
+      if (manoActiva && manoActiva.every(card => !card.hidden)) {
+        evaluarResultadoDobleOculto(pendingRevealEval.dealerHand, pendingRevealEval.hands);
+        setPendingRevealEval(null);
+      }
+    }
+    // eslint-disable-next-line
+  }, [pendingRevealEval, active]);
 
   // Guardar el saldo cada vez que cambia para este usuario
   useEffect(() => {
@@ -115,7 +136,12 @@ export default function Blackjack({ currentUser }) {
   // Si cambia el usuario (prop), recargar su saldo específico
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
-    setBalance(saved ? Number(saved) : 10000);
+    if (saved === null) {
+      setBalance(10000);
+      localStorage.setItem(storageKey, '10000');
+    } else {
+      setBalance(Number(saved));
+    }
   }, [storageKey]);
 
   const canSplit = () => {
@@ -134,62 +160,61 @@ export default function Blackjack({ currentUser }) {
     return true;
   };
 
-  const canDouble = () => {
+  // Eliminado: canDouble y doubleDown (solo se usará canDoubleHidden y doubleDownHidden)
+  const canDoubleHidden = () => {
     if (phase !== 'player') return false;
     const hand = playerHands[active];
     if (!hand || hand.length !== 2) return false;
-    // Verificar que hay saldo suficiente para doblar la apuesta de esta mano
-    const currentBet = bets[active] || bet;
-    if (balance < currentBet) return false;
+    if (balance < (bets[active] || bet)) return false;
     return true;
   };
+
   const startRound = () => {
     if (!chipSelected) {
-      setMessage('⚠️ Selecciona una ficha para habilitar Repartir');
+      setMessage('Selecciona una ficha para habilitar Repartir');
       return;
     }
     if (bet < 100) {
-      setMessage('⚠️ La apuesta mínima es $100');
+      setMessage('La apuesta mínima es $100');
       return;
     }
     if (bet > balance) {
-      setMessage('⚠️ No tienes suficiente saldo para esa apuesta');
+      setMessage('No tienes suficiente saldo para esa apuesta');
       return;
     }
-    
-  setMessage('');
-  // limpiar indicadores de resultados previos
-  setHandResults([]);
-  setDealerStatus('');
+
+    setMessage('');
+    // limpiar indicadores de resultados previos
+    setHandResults([]);
+    setDealerStatus('');
     setBalance((b) => b - bet);
 
     // Preparar mazo si es necesario
     let currentDeck = deck.length < 15 ? shuffle(buildDeck()) : deck.slice();
-    
+
     // Repartir 2 cartas al jugador y 2 al crupier
     const playerCard1 = currentDeck.pop();
     const playerCard2 = currentDeck.pop();
     const dealerCard1 = currentDeck.pop();
     const dealerCard2 = currentDeck.pop();
-    
+
     const h1 = [playerCard1, playerCard2];
     const d1 = [dealerCard1, dealerCard2];
-    
+
     setDeck(currentDeck);
     setPlayerHands([h1]);
     setDealerHand(d1);
     setActive(0);
     setBets([bet]);
-    setPhase('player');
 
     // Verificar blackjack natural
     const pTotal = scoreHand(h1);
     const dTotal = scoreHand(d1);
-    
+
     if (pTotal === 21 || dTotal === 21) {
       // Ambos tienen blackjack en el deal inicial
       if (pTotal === 21 && dTotal === 21) {
-        setMessage('🤝 Empate - Ambos tienen Blackjack. Se devuelve tu apuesta de $' + bet);
+        setMessage('Empate - Ambos tienen Blackjack. Se devuelve tu apuesta de $' + bet);
         setBalance((b) => b + bet);
         setHandResults(['push']);
         setDealerStatus('blackjack');
@@ -204,15 +229,13 @@ export default function Blackjack({ currentUser }) {
         const dealerUp = d1[0];
         const canDealerTryPush = dealerUp && (dealerUp.rank === 'A' || ['10','J','Q','K'].includes(dealerUp.rank));
         if (canDealerTryPush) {
-          // Permitir que el crupier juegue hasta 17 para posible empate (21)
-          setPlayerNaturalBlackjack(true);
-          setMessage(`♠ Blackjack del jugador. El crupier muestra ${dealerUp.rank} y continuará hasta 17 para posible empate.`);
+          setMessage(`Blackjack del jugador. El crupier muestra ${dealerUp.rank} y continuará hasta 17 para posible empate.`);
           setPhase('dealer');
           performDealerTurn(true);
         } else {
           // No hay posibilidad de blackjack del crupier: pagar de inmediato 3:2
           const ganancia = Math.floor(bet * 1.5);
-          setMessage(`🎉 ¡BLACKJACK! Ganas $${ganancia} (pago 3:2) 🎊`);
+          setMessage(`¡BLACKJACK! Ganas $${ganancia} (pago 3:2)`);
           setBalance((b) => b + bet + ganancia);
           setGananciaVisual(ganancia);
           setTimeout(() => setGananciaVisual(null), 3000);
@@ -226,7 +249,7 @@ export default function Blackjack({ currentUser }) {
       }
       // Solo dealer tiene blackjack
       if (dTotal === 21 && pTotal !== 21) {
-        setMessage(`😔 El crupier tiene Blackjack. Pierdes $${bet}`);
+        setMessage(`El crupier tiene Blackjack. Pierdes $${bet}`);
         setPerdidaVisual(bet);
         setTimeout(() => setPerdidaVisual(null), 3000);
         setHandResults(['lose']);
@@ -237,6 +260,9 @@ export default function Blackjack({ currentUser }) {
         return;
       }
     }
+
+    // Si nadie tiene blackjack, dejar al jugador en la fase 'player' para que pueda jugar
+    setPhase('player');
   };
 
   const hit = () => {
@@ -246,18 +272,20 @@ export default function Blackjack({ currentUser }) {
     if (currentDeck.length === 0) currentDeck = shuffle(buildDeck());
     const newCard = currentDeck.pop();
     setDeck(currentDeck);
-    // Agregar carta a la mano activa
     setPlayerHands(ph => {
       const copy = ph.map(h => h.slice());
       copy[active].push(newCard);
       const total = scoreHand(copy[active]);
       if (total > 21) {
+        // Marcar la mano como perdida
+        setHandResults(prev => {
+          const updated = [...prev];
+          updated[active] = 'bust';
+          return updated;
+        });
         setTimeout(() => {
-          if (active + 1 < copy.length) {
-            setActive(active + 1);
-          } else {
-            performDealerTurn();
-          }
+          setPhase('dealer');
+          performDealerTurn();
         }, 300);
       }
       return copy;
@@ -273,67 +301,72 @@ export default function Blackjack({ currentUser }) {
     }
   };
 
-  const performDealerTurn = (modoBlackjackJugador = false) => {
+  // Modificar performDealerTurn para animar el reparto de cartas
+  const performDealerTurn = async (modoBlackjackJugador = false, oculto = false) => {
     setPhase('dealer');
+    let currentDeck = deck.slice();
+    let d = dealerHand.slice();
+    // Animar el reparto de cartas del crupier
+    while (scoreHand(d) <= HIT_THRESHOLD) {
+      if (currentDeck.length === 0) currentDeck = shuffle(buildDeck());
+      d.push(currentDeck.pop());
+      setDealerHand([...d]);
+      await new Promise(res => setTimeout(res, 700)); // 700ms entre cartas
+    }
+    setDeck(currentDeck);
+    setDealerHand(d);
     setTimeout(() => {
-      let currentDeck = deck.slice();
-      let d = dealerHand.slice();
-      while (scoreHand(d) <= HIT_THRESHOLD) {
-        if (currentDeck.length === 0) currentDeck = shuffle(buildDeck());
-        d.push(currentDeck.pop());
-      }
-      setDeck(currentDeck);
-      setDealerHand(d);
-      setTimeout(() => {
+      if (oculto) {
+        // Animación especial de revelado
+        setRevealHidden(true);
+        setTimeout(() => {
+          setPlayerHands(ph => {
+            const copy = ph.map(h => h.slice());
+            // Quitar el flag hidden de la carta
+            copy[active] = copy[active].map(card => ({ ...card, hidden: false }));
+            // Guardar para evaluar después del render
+            setPendingRevealEval({ dealerHand: d, hands: copy });
+            return copy;
+          });
+          setRevealHidden(false);
+        }, 1200); // 1.2s de animación de revelado
+      } else {
+        // Evaluar resultado normal (no doble oculto)
         const hands = playerHands;
         const apuestas = bets;
         const dTotal = scoreHand(d);
-        let totalWin = 0;
         let mensajes = [];
+        let totalWin = 0;
         let totalGanado = 0;
         let totalPerdido = 0;
         const outcomes = [];
         hands.forEach((hand, i) => {
           const pTotal = scoreHand(hand);
           const b = apuestas[i] || bet;
-          if (modoBlackjackJugador && playerNaturalBlackjack) {
-            if (pTotal === 21 && dTotal === 21) {
-              mensajes.push(`🤝 Mano ${i + 1}: Dealer alcanza 21. Empate, se devuelve $${b}`);
-              totalWin += b;
-              outcomes.push('push');
-              return;
-            }
-            if (pTotal === 21 && dTotal !== 21) {
-              const gananciaBJ = Math.floor(b * 1.5);
-              mensajes.push(`🎉 Mano ${i + 1}: BLACKJACK gana $${gananciaBJ} (3:2)`);
-              totalWin += b + gananciaBJ;
-              totalGanado += gananciaBJ;
-              outcomes.push('blackjack');
-              return;
-            }
-          }
+          // Si la apuesta fue doblada, la ganancia debe ser el doble de la apuesta inicial
+          const apuestaInicial = bet;
+          const esDoble = b === apuestaInicial * 2;
+          // CORRECCIÓN: El jugador gana si su puntaje es mayor que el del crupier y no se pasa de 21
           if (pTotal > 21) {
-            mensajes.push(`💥 Mano ${i + 1}: Te pasaste con ${pTotal}`);
+            mensajes.push(`Mano ${i + 1}: Te pasaste con ${pTotal}`);
             totalPerdido += b;
             outcomes.push('bust');
           } else if (dTotal > 21) {
-            const ganancia = b;
-            mensajes.push(`🎉 Mano ${i + 1}: ¡Ganas $${ganancia}! (Crupier se pasó con ${dTotal})`);
-            totalWin += b * 2;
-            totalGanado += ganancia;
+            mensajes.push(`Mano ${i + 1}: ¡Ganas $${b}! (Crupier se pasó con ${dTotal})`);
+            totalWin += esDoble ? apuestaInicial * 4 : b * 2;
+            totalGanado += esDoble ? apuestaInicial * 2 : b;
             outcomes.push('win');
           } else if (pTotal > dTotal) {
-            const ganancia = b;
-            mensajes.push(`✅ Mano ${i + 1}: ¡Ganas $${ganancia}! (${pTotal} vs ${dTotal})`);
-            totalWin += b * 2;
-            totalGanado += ganancia;
+            mensajes.push(`Mano ${i + 1}: ¡Ganas $${b}! (${pTotal} vs ${dTotal})`);
+            totalWin += esDoble ? apuestaInicial * 4 : b * 2;
+            totalGanado += esDoble ? apuestaInicial * 2 : b;
             outcomes.push('win');
           } else if (pTotal === dTotal) {
-            mensajes.push(`🤝 Mano ${i + 1}: Empate (${pTotal}) - Se devuelve apuesta de $${b}`);
+            mensajes.push(`Mano ${i + 1}: Empate (${pTotal}) - Se devuelve apuesta de $${b}`);
             totalWin += b;
             outcomes.push('push');
           } else {
-            mensajes.push(`❌ Mano ${i + 1}: Pierdes $${b} (${pTotal} vs ${dTotal})`);
+            mensajes.push(`Mano ${i + 1}: Pierdes $${b} (${pTotal} vs ${dTotal})`);
             totalPerdido += b;
             outcomes.push('lose');
           }
@@ -358,84 +391,130 @@ export default function Blackjack({ currentUser }) {
         setBet(0);
         setChipSelected(false);
         setPhase('roundOver');
-        if (playerNaturalBlackjack) setPlayerNaturalBlackjack(false);
-      }, 100);
-    }, 500);
+        // setHiddenCard(null);
+      }
+    }, 700);
   };
 
-  const doubleDown = () => {
-    if (!canDouble()) {
-      if (balance < bets[active]) {
-        setMessage('⚠️ No tienes suficiente saldo para doblar');
+  // Función para evaluar el resultado especial del doble oculto
+  function evaluarResultadoDobleOculto(d, handsParam) {
+      const hands = handsParam || playerHands;
+      const apuestas = bets;
+      const dTotal = scoreHand(d);
+      let mensajes = [];
+      let totalWin = 0;
+      let totalGanado = 0;
+      let totalPerdido = 0;
+      const outcomes = [];
+      hands.forEach((hand, i) => {
+        const pTotal = scoreHand(hand);
+        const b = apuestas[i] || bet;
+        const apuestaInicial = bet;
+        const esDoble = b === apuestaInicial * 2;
+        if (dTotal > 21) {
+          mensajes.push(`Mano ${i + 1}: ¡Ganas $${b}! (Crupier se pasó con ${dTotal})`);
+          totalWin += esDoble ? apuestaInicial * 4 : b * 2;
+          totalGanado += esDoble ? apuestaInicial * 2 : b;
+          outcomes.push('win');
+        } else if (pTotal > 21) {
+          mensajes.push(`Mano ${i + 1}: Te pasaste con ${pTotal}`);
+          totalPerdido += b;
+          outcomes.push('bust');
+        } else if (pTotal > dTotal) {
+          mensajes.push(`Mano ${i + 1}: ¡Ganas $${b}! (${pTotal} vs ${dTotal})`);
+          totalWin += esDoble ? apuestaInicial * 4 : b * 2;
+          totalGanado += esDoble ? apuestaInicial * 2 : b;
+          outcomes.push('win');
+        } else if (pTotal === dTotal) {
+          mensajes.push(`Mano ${i + 1}: Empate (${pTotal}) - Se devuelve apuesta de $${b}`);
+          totalWin += b;
+          outcomes.push('push');
+        } else {
+          mensajes.push(`Mano ${i + 1}: Pierdes $${b} (${pTotal} vs ${dTotal})`);
+          totalPerdido += b;
+          outcomes.push('lose');
+        }
+      });
+      let resumen = '';
+      if (totalGanado > 0 && totalPerdido > 0) {
+        const neto = totalGanado - totalPerdido;
+        resumen = neto > 0 ? ` 💰 Balance: +$${neto}` : ` Balance: -$${Math.abs(neto)}`;
+      } else if (totalGanado > 0) resumen = ` 💰 Total ganado: $${totalGanado}`;
+      else if (totalPerdido > 0) resumen = ` Total perdido: $${totalPerdido}`;
+      if (totalWin > 0) setBalance(bal => bal + totalWin);
+      if (totalGanado > 0) {
+        setGananciaVisual(totalGanado);
+        setTimeout(() => setGananciaVisual(null), 3000);
+      } else if (totalPerdido > 0) {
+        setPerdidaVisual(totalPerdido);
+        setTimeout(() => setPerdidaVisual(null), 3000);
       }
-      return;
+      setHandResults(outcomes);
+      setDealerStatus(dTotal > 21 ? 'bust' : '');
+      setMessage(mensajes.join(' | ') + resumen);
+      setBet(0);
+      setChipSelected(false);
+      setPhase('roundOver');
+      // setHiddenCard(null);
     }
-    const currentBet = bets[active];
-    
+
+  // Eliminado: doubleDown (solo queda doubleDownHidden)
+
+  const doubleDownHidden = () => {
+    if (!canDoubleHidden()) return;
+    const currentBet = bets[active] || bet;
+    // Descontar el doble de la apuesta inicial (ya se descontó una vez al repartir)
     setBalance((b) => b - currentBet);
     setBets((arr) => {
       const copy = arr.slice();
-      copy[active] = copy[active] * 2;
+      copy[active] = currentBet * 2;
       return copy;
     });
-    
-    // Robar carta del mazo
+
+    // Robar una carta del mazo y marcarla como oculta
     let currentDeck = deck.slice();
     if (currentDeck.length === 0) {
       currentDeck = shuffle(buildDeck());
     }
     const newCard = currentDeck.pop();
     setDeck(currentDeck);
-    
-    // Agregar carta a la mano activa
+
     setPlayerHands((ph) => {
-      const copy = ph.map((h) => h.slice());
-      copy[active].push(newCard);
+      const copy = ph.map(h => h.slice());
+      // La carta agregada debe tener hidden:true para animación
+      copy[active].push({ ...newCard, hidden: true });
       return copy;
     });
-    setMessage('');
-    // Auto-plantarse después de doblar, asegurando que el estado esté actualizado
+
+    // Después de doblar, el jugador no puede pedir más cartas, así que pasa al dealer
     setTimeout(() => {
-      if (active + 1 < playerHands.length) {
-        setActive(active + 1);
-      } else {
-        // Esperar un poco más para asegurar que el estado de la mano esté actualizado
-        setTimeout(() => {
-          performDealerTurn();
-        }, 100);
-      }
-    }, 500);
+      setPhase('dealer');
+      performDealerTurn(false, true); // true = jugada con carta oculta
+    }, 300);
   };
 
+  // Función para dividir la mano si es posible
   const split = () => {
-    if (!canSplit()) {
-      if (balance < bet) {
-        setMessage('⚠️ No tienes suficiente saldo para dividir');
-      }
-      return;
-    }
-    
+    if (!canSplit()) return;
     const hand = playerHands[active];
-    const c1 = hand[0];
-    const c2 = hand[1];
-    
-    // Robar cartas del mazo
+    if (hand.length !== 2 || hand[0].rank !== hand[1].rank) return;
+    // Quitar una carta de la mano original y crear una nueva mano con esa carta
+    const firstCard = hand[0];
+    const secondCard = hand[1];
     let currentDeck = deck.slice();
-    if (currentDeck.length < 2) {
-      currentDeck = shuffle(buildDeck());
-    }
-    const extraCard1 = currentDeck.pop();
-    const extraCard2 = currentDeck.pop();
-    setDeck(currentDeck);
-    
-    // Crear dos nuevas manos con una carta extra cada una
-    const newHands = [[c1, extraCard1], [c2, extraCard2]];
-    const newBets = [bets[active], bet];
-    
+    if (currentDeck.length < 2) currentDeck = shuffle(buildDeck());
+    const newCard1 = currentDeck.pop();
+    const newCard2 = currentDeck.pop();
+    const newHands = [
+      [firstCard, newCard1],
+      [secondCard, newCard2]
+    ];
     setPlayerHands(newHands);
-    setBets(newBets);
+    setBets([bet, bet]);
     setBalance((b) => b - bet);
-    setMessage('');
+    setActive(0);
+    setDeck(currentDeck);
+    setMessage('Mano dividida. Juega cada mano por separado.');
   };
 
   const dealerVisible = phase !== 'player';
@@ -666,17 +745,55 @@ export default function Blackjack({ currentUser }) {
                   marginBottom: '4px'
                 }}>
                   {hand.map((c, i) => (
-                    <img
-                      key={i}
-                      src={getCardImage(c)}
-                      alt={`${c.rank}${c.suit}`}
-                      className="Carta repartida"
-                      style={{ 
-                        width: '65px',
-                        height: 'auto',
-                        boxShadow: '0 4px 8px rgba(0,0,0,0.4)'
-                      }}
-                    />
+                    c.hidden ? (
+                      <div
+                        key={i}
+                        className={revealHidden ? 'card-hidden-reveal' : 'card-hidden'}
+                        style={{
+                          width: '65px',
+                          height: '90px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'linear-gradient(135deg, #222 60%, #FFD700 100%)',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 12px #FFD700',
+                          fontSize: 32,
+                          color: '#FFD700',
+                          position: 'relative',
+                          transition: 'transform 0.7s cubic-bezier(.68,-0.55,.27,1.55), box-shadow 0.7s',
+                          transform: revealHidden ? 'rotateY(180deg) scale(1.1)' : 'none',
+                          zIndex: 2
+                        }}
+                      >
+                        {/* Animación especial: signo de pregunta y destello */}
+                        <span style={{fontSize: 38, fontWeight: 'bold', filter: revealHidden ? 'drop-shadow(0 0 8px #FFD700)' : 'none'}}>
+                          ?
+                        </span>
+                        {revealHidden && (
+                          <span style={{
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            background: 'rgba(255, 215, 0, 0.18)',
+                            borderRadius: '8px',
+                            pointerEvents: 'none',
+                            animation: 'revealFlash 1.2s linear'
+                          }} />
+                        )}
+                      </div>
+                    ) : (
+                      <img
+                        key={i}
+                        src={getCardImage(c)}
+                        alt={`${c.rank}${c.suit}`}
+                        className="Carta repartida"
+                        style={{ 
+                          width: '65px',
+                          height: 'auto',
+                          boxShadow: '0 4px 8px rgba(0,0,0,0.4)'
+                        }}
+                      />
+                    )
                   ))}
                 </div>
                 <div style={{
@@ -685,7 +802,10 @@ export default function Blackjack({ currentUser }) {
                   color: scoreHand(hand) > 21 ? '#ef4444' : '#10b981',
                   textShadow: '0 2px 4px rgba(0,0,0,0.8)'
                 }}>
-                  {getHandDisplay(hand)}
+                  {hand.some(c => c.hidden) 
+                    ? getHandDisplay(hand.filter(c => !c.hidden))
+                    : getHandDisplay(hand)
+                  }
                 </div>
               </div>
             ))}
@@ -723,7 +843,7 @@ export default function Blackjack({ currentUser }) {
             boxShadow: phase === 'player' ? '0 4px 10px rgba(0,0,0,0.3)' : 'none'
           }}
           onClick={hit} 
-          disabled={phase !== 'player'}
+          disabled={phase !== 'player' || scoreHand(playerHands[active] || []) >= 21}
           onMouseEnter={(e) => {
             if (phase === 'player') {
               e.target.style.background = 'linear-gradient(145deg, #3d4758, #2a3040)';
@@ -737,7 +857,7 @@ export default function Blackjack({ currentUser }) {
             e.target.style.boxShadow = '0 4px 10px rgba(0,0,0,0.3)';
           }}
         >
-          👆 Pedir
+          Pedir
         </button>
         
         <button 
@@ -770,40 +890,31 @@ export default function Blackjack({ currentUser }) {
             e.target.style.boxShadow = '0 4px 10px rgba(0,0,0,0.3)';
           }}
         >
-          ✋ Plantarse
+          Plantarse
         </button>
+        
+        {/* Botón x2 Doblar eliminado, solo queda Doblar Oculto */}
         
         <button 
           style={{
-            background: canDouble() ? 'linear-gradient(145deg, #2d3748, #1a202c)' : 'linear-gradient(145deg, #4b5563, #374151)',
-            border: '1px solid #4a5568',
-            color: canDouble() ? '#e2e8f0' : '#9ca3af',
+            background: canDoubleHidden() ? 'linear-gradient(145deg, #2d3748, #1a202c)' : 'linear-gradient(145deg, #4b5563, #374151)',
+            border: '1px solid #FFD700',
+            color: canDoubleHidden() ? '#FFD700' : '#9ca3af',
             padding: '12px 24px',
             borderRadius: '10px',
             fontSize: '15px',
             fontWeight: 'bold',
-            cursor: !canDouble() ? 'not-allowed' : 'pointer',
-            opacity: !canDouble() ? 0.5 : 1,
+            cursor: !canDoubleHidden() ? 'not-allowed' : 'pointer',
+            opacity: !canDoubleHidden() ? 0.5 : 1,
             transition: 'all 0.3s ease',
             minWidth: '120px',
-            boxShadow: canDouble() ? '0 4px 10px rgba(0,0,0,0.3)' : 'none'
+            boxShadow: canDoubleHidden() ? '0 4px 10px #FFD700' : 'none',
+            marginLeft: 8
           }}
-          onClick={doubleDown} 
-          disabled={!canDouble()}
-          onMouseEnter={(e) => {
-            if (canDouble()) {
-              e.target.style.background = 'linear-gradient(145deg, #3d4758, #2a3040)';
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 6px 15px rgba(0,0,0,0.4)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.background = 'linear-gradient(145deg, #2d3748, #1a202c)';
-            e.target.style.transform = 'translateY(0)';
-            e.target.style.boxShadow = '0 4px 10px rgba(0,0,0,0.3)';
-          }}
+          onClick={doubleDownHidden}
+          disabled={!canDoubleHidden()}
         >
-          x2 Doblar
+          Doblar Oculto
         </button>
         
         <button 
@@ -836,7 +947,7 @@ export default function Blackjack({ currentUser }) {
             e.target.style.boxShadow = '0 4px 10px rgba(0,0,0,0.3)';
           }}
         >
-          ✂️ Dividir
+          Dividir
         </button>
       </div>
 
@@ -874,7 +985,7 @@ export default function Blackjack({ currentUser }) {
                 // Si añadir esta ficha excede el saldo, mostrar advertencia
                 const nuevoTotal = bet + valor;
                 if (nuevoTotal > balance) {
-                  setMessage(`⚠️ Saldo insuficiente. Intentas apostar $${nuevoTotal} y solo tienes $${balance}`);
+                  setMessage(`Saldo insuficiente. Intentas apostar $${nuevoTotal} y solo tienes $${balance}`);
                   return;
                 }
                 setBet(nuevoTotal);

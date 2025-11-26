@@ -9,7 +9,11 @@ import ConfirmModal from './components/ConfirmModal';
 import TuOpinion from './components/TuOpinion';
 import Comentarios from './components/Comentarios';
 import ComentariosCarrusel from './components/ComentariosCarrusel';
+
 import Blackjack from './components/Blackjack';
+
+import JuegosApi from './components/JuegosApi';
+import JuegosVista from './components/JuegosVista';
 
 // Importar imágenes
 import blackjackImage from './assets/images/blackjack.jpg';
@@ -24,7 +28,7 @@ function App() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showTuOpinion, setShowTuOpinion] = useState(false);
   // Eliminado: Perfil
-  const [currentView, setCurrentView] = useState('home'); // 'home' o 'comentarios'
+  const [currentView, setCurrentView] = useState('home'); // 'home', 'comentarios', 'juegosvista'
   const [currentUser, setCurrentUser] = useState(null);
 
   // Verificar si hay una sesión activa al cargar la app
@@ -118,6 +122,11 @@ function App() {
             </div>
           </section>
 
+          {/* NUEVO: Lista de juegos desde la API */}
+          <section className="api-juegos-section">
+            <JuegosApi onVerJuegos={() => setCurrentView('juegosvista')} />
+          </section>
+
           {/* Cards secundarias */}
           <section className="featured-cards">
             <div onClick={() => setCurrentView('comentarios')} className="featured-card">
@@ -145,6 +154,15 @@ function App() {
 
           {/* Carrusel de comentarios */}
           <ComentariosCarrusel />
+        </main>
+      ) : currentView === 'juegosvista' ? (
+        <main className="juegos-vista-page">
+          <div className="page-header">
+            <button className="btn-back" onClick={() => setCurrentView('home')}>
+              ← Volver al Inicio
+            </button>
+          </div>
+          <JuegosVista onGoBlackjack={() => setCurrentView('blackjack')} />
         </main>
       ) : currentView === 'blackjack' ? (
         <main className="blackjack-page">
