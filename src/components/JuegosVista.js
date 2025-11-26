@@ -35,7 +35,7 @@ function JuegosVista({ onGoBlackjack }) {
             if (isBlackjack) {
               onGoBlackjack();
             } else if (isRuleta || isPoker) {
-              setMensaje('Prontamente...');
+              setMensaje('Proximamente...');
               setTimeout(() => setMensaje(""), 1500);
             }
           };
