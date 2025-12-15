@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import blackjackImg from "../assets/images/blackjack.jpg";
 import ruletaImg from "../assets/images/ruleta.jpg";
@@ -10,7 +9,6 @@ const imagenes = {
   Poker: pokerImg,
 };
 
-
 function JuegosVista({ onGoBlackjack }) {
   const [juegos, setJuegos] = useState([]);
   const [mensaje, setMensaje] = useState("");
@@ -19,12 +17,12 @@ function JuegosVista({ onGoBlackjack }) {
     fetch("http://localhost:8080/api/juegos")
       .then((response) => response.json())
       .then((data) => setJuegos(data))
-      .catch((error) => setJuegos([]));
+      .catch(() => setJuegos([]));
   }, []);
 
   return (
     <div className="juegos-vista">
-      <h1 className="casino-title" style={{marginBottom: 32, color: 'var(--gold)', fontFamily: 'Cinzel Decorative, serif', fontWeight: 'bold', textShadow: '0 0 10px #FFD700, 0 0 20px #FFD700, 2px 2px 4px rgba(0,0,0,0.5)', textAlign: 'center'}}>Juegos</h1>
+      <h1 className="casino-title" style={{ marginBottom: 32, color: 'var(--gold)', fontFamily: 'Cinzel Decorative, serif', fontWeight: 'bold', textShadow: '0 0 10px #FFD700, 0 0 20px #FFD700, 2px 2px 4px rgba(0,0,0,0.5)', textAlign: 'center' }}>Juegos</h1>
       <div className="juegos-vista-lista">
         {juegos.map((juego) => {
           const nombreLower = juego.nombre.toLowerCase();
@@ -57,10 +55,7 @@ function JuegosVista({ onGoBlackjack }) {
                   maxWidth: 400,
                 }}
               >
-                <div
-                  className="hero-text"
-                  style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-                >
+                <div className="hero-text" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                   <h2 className="blackjack-title" style={{ textAlign: 'center', width: '100%' }}>{juego.nombre}</h2>
                 </div>
               </div>
@@ -69,8 +64,8 @@ function JuegosVista({ onGoBlackjack }) {
         })}
       </div>
       {mensaje && (
-        <div style={{position: 'fixed', top: 80, left: 0, right: 0, zIndex: 9999, display: 'flex', justifyContent: 'center'}}>
-          <div style={{background: '#232526', color: '#FFD700', padding: '16px 32px', borderRadius: 16, fontSize: 22, fontWeight: 'bold', boxShadow: '0 4px 24px rgba(0,0,0,0.3)'}}>
+        <div style={{ position: 'fixed', top: 80, left: 0, right: 0, zIndex: 9999, display: 'flex', justifyContent: 'center' }}>
+          <div style={{ background: '#232526', color: '#FFD700', padding: '16px 32px', borderRadius: 16, fontSize: 22, fontWeight: 'bold', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}>
             {mensaje}
           </div>
         </div>
