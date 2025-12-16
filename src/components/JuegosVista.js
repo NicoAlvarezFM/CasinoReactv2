@@ -16,7 +16,6 @@ function JuegosVista({ onGoBlackjack, isLoggedIn, onLoginRequest, onRegisterRequ
   const [showCrud, setShowCrud] = useState(false);
   const [form, setForm] = useState({ nombre: "", descripcion: "", tipo: "", estado: "Activo" });
   const [editId, setEditId] = useState(null);
-  const [showAuth, setShowAuth] = useState(false);
 
   // CREATE
   const createJuego = async () => {
